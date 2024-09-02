@@ -178,12 +178,12 @@ func (re *Regexp) ReplaceFunc(input string, evaluator MatchEvaluator, startAt, c
 
 // FindStringMatch searches the input string for a Regexp match
 func (re *Regexp) FindStringMatch(s string) (*Match, error) {
-	// convert string to runes
-	return re.run(false, -1, getRunes(s))
+	// convert string to bytes
+	return re.run(false, -1, getBytes(s))
 }
 
-// FindRunesMatch searches the input rune slice for a Regexp match
-func (re *Regexp) FindRunesMatch(r []rune) (*Match, error) {
+// FindBytesMatch searches the input byte slice for a Regexp match
+func (re *Regexp) FindBytesMatch(r []byte) (*Match, error) {
 	return re.run(false, -1, r)
 }
 
@@ -192,17 +192,17 @@ func (re *Regexp) FindStringMatchStartingAt(s string, startAt int) (*Match, erro
 	if startAt > len(s) {
 		return nil, errors.New("startAt must be less than the length of the input string")
 	}
-	r, startAt := re.getRunesAndStart(s, startAt)
+	r, startAt := re.getBytesAndStart(s, startAt)
 	if startAt == -1 {
 		// we didn't find our start index in the string -- that's a problem
-		return nil, errors.New("startAt must align to the start of a valid rune in the input string")
+		return nil, errors.New("startAt must align to the start of a valid byte in the input string")
 	}
 
 	return re.run(false, startAt, r)
 }
 
-// FindRunesMatchStartingAt searches the input rune slice for a Regexp match starting at the startAt index
-func (re *Regexp) FindRunesMatchStartingAt(r []rune, startAt int) (*Match, error) {
+// FindBytesMatchStartingAt searches the input byte slice for a Regexp match starting at the startAt index
+func (re *Regexp) FindBytesMatchStartingAt(r []byte, startAt int) (*Match, error) {
 	return re.run(false, startAt, r)
 }
 
@@ -233,44 +233,44 @@ func (re *Regexp) FindNextMatch(m *Match) (*Match, error) {
 // MatchString return true if the string matches the regex
 // error will be set if a timeout occurs
 func (re *Regexp) MatchString(s string) (bool, error) {
-	m, err := re.run(true, -1, getRunes(s))
+	m, err := re.run(true, -1, getBytes(s))
 	if err != nil {
 		return false, err
 	}
 	return m != nil, nil
 }
 
-func (re *Regexp) getRunesAndStart(s string, startAt int) ([]rune, int) {
+func (re *Regexp) getBytesAndStart(s string, startAt int) ([]byte, int) {
 	if startAt < 0 {
 		if re.RightToLeft() {
-			r := getRunes(s)
+			r := getBytes(s)
 			return r, len(r)
 		}
-		return getRunes(s), 0
+		return getBytes(s), 0
 	}
-	ret := make([]rune, len(s))
+	ret := make([]byte, len(s))
 	i := 0
-	runeIdx := -1
-	for strIdx, r := range s {
+	byteIdx := -1
+	for strIdx, r := range []byte(s) {
 		if strIdx == startAt {
-			runeIdx = i
+			byteIdx = i
 		}
 		ret[i] = r
 		i++
 	}
 	if startAt == len(s) {
-		runeIdx = i
+		byteIdx = i
 	}
-	return ret[:i], runeIdx
+	return ret[:i], byteIdx
 }
 
-func getRunes(s string) []rune {
-	return []rune(s)
+func getBytes(s string) []byte {
+	return []byte(s)
 }
 
-// MatchRunes return true if the runes matches the regex
+// MatchBytes return true if the bytes matches the regex
 // error will be set if a timeout occurs
-func (re *Regexp) MatchRunes(r []rune) (bool, error) {
+func (re *Regexp) MatchBytes(r []byte) (bool, error) {
 	m, err := re.run(true, -1, r)
 	if err != nil {
 		return false, err

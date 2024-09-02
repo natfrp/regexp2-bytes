@@ -86,17 +86,17 @@ func BenchmarkAnchoredLiteralLongNonMatch(b *testing.B) {
 	b.StopTimer()
 
 	data := "abcdefghijklmnopqrstuvwxyz"
-	x := make([]rune, 32768*len(data))
+	x := make([]byte, 32768*len(data))
 	for i := 0; i < 32768; /*(2^15)*/ i++ {
 		for j := 0; j < len(data); j++ {
-			x[i*len(data)+j] = rune(data[j])
+			x[i*len(data)+j] = byte(data[j])
 		}
 	}
 
 	re := MustCompile("^zbc(d|e)", 0)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		if m, err := re.MatchRunes(x); m || err != nil {
+		if m, err := re.MatchBytes(x); m || err != nil {
 			b.Fatalf("unexpected match or error! %v", err)
 		}
 	}
@@ -117,17 +117,17 @@ func BenchmarkAnchoredShortMatch(b *testing.B) {
 func BenchmarkAnchoredLongMatch(b *testing.B) {
 	b.StopTimer()
 	data := "abcdefghijklmnopqrstuvwxyz"
-	x := make([]rune, 32768*len(data))
+	x := make([]byte, 32768*len(data))
 	for i := 0; i < 32768; /*(2^15)*/ i++ {
 		for j := 0; j < len(data); j++ {
-			x[i*len(data)+j] = rune(data[j])
+			x[i*len(data)+j] = byte(data[j])
 		}
 	}
 
 	re := MustCompile("^.bc(d|e)", 0)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		if m, err := re.MatchRunes(x); !m || err != nil {
+		if m, err := re.MatchBytes(x); !m || err != nil {
 			b.Fatalf("no match or error! %v", err)
 		}
 	}
@@ -205,13 +205,13 @@ func BenchmarkOnePassLongNotPrefix(b *testing.B) {
 	}
 }
 
-var text []rune
+var text []byte
 
-func makeText(n int) []rune {
+func makeText(n int) []byte {
 	if len(text) >= n {
 		return text[:n]
 	}
-	text = make([]rune, n)
+	text = make([]byte, n)
 	x := ^uint32(0)
 	for i := range text {
 		x += x
@@ -222,7 +222,7 @@ func makeText(n int) []rune {
 		if x%31 == 0 {
 			text[i] = '\n'
 		} else {
-			text[i] = rune(x%(0x7E+1-0x20) + 0x20)
+			text[i] = byte(x%(0x7E+1-0x20) + 0x20)
 		}
 	}
 	return text
@@ -234,7 +234,7 @@ func benchmark(b *testing.B, re string, n int) {
 	b.ResetTimer()
 	b.SetBytes(int64(n))
 	for i := 0; i < b.N; i++ {
-		if m, err := r.MatchRunes(t); m {
+		if m, err := r.MatchBytes(t); m {
 			b.Fatal("match!")
 		} else if err != nil {
 			b.Fatalf("Err %v", err)
@@ -301,7 +301,7 @@ func BenchmarkLeading(b *testing.B) {
 	inp := makeText(1000000)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		if m, err := r.MatchRunes(inp); !m {
+		if m, err := r.MatchBytes(inp); !m {
 			b.Errorf("Expected match")
 		} else if err != nil {
 			b.Errorf("Error: %v", err)
@@ -331,7 +331,7 @@ func BenchmarkShortSearch(b *testing.B) {
 			t := makeText(100)
 			b.SetBytes(int64(len(t)))
 			matchOnce := func(r *Regexp) {
-				if m, err := r.MatchRunes(t); m {
+				if m, err := r.MatchBytes(t); m {
 					b.Fatal("match!")
 				} else if err != nil {
 					b.Fatalf("Err %v", err)

@@ -5919,8 +5919,6 @@ No match
  0: regulaer
     Regex  
  0: Regex
-    regulär 
- 0: regul\xc3\xa4r
 
 #/Åæåä[à-ÿÀ-ß]+/
 #    Åæåäà

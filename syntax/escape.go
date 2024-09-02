@@ -9,7 +9,7 @@ import (
 
 func Escape(input string) string {
 	b := &bytes.Buffer{}
-	for _, r := range input {
+	for _, r := range []byte(input) {
 		escape(b, r, false)
 	}
 	return b.String()
@@ -17,12 +17,12 @@ func Escape(input string) string {
 
 const meta = `\.+*?()|[]{}^$# `
 
-func escape(b *bytes.Buffer, r rune, force bool) {
-	if unicode.IsPrint(r) {
-		if strings.IndexRune(meta, r) >= 0 || force {
-			b.WriteRune('\\')
+func escape(b *bytes.Buffer, r byte, force bool) {
+	if unicode.IsPrint(rune(r)) {
+		if strings.IndexByte(meta, r) >= 0 || force {
+			b.WriteByte('\\')
 		}
-		b.WriteRune(r)
+		b.WriteByte(r)
 		return
 	}
 
@@ -40,29 +40,25 @@ func escape(b *bytes.Buffer, r rune, force bool) {
 	case '\v':
 		b.WriteString(`\v`)
 	default:
-		if r < 0x100 {
-			b.WriteString(`\x`)
-			s := strconv.FormatInt(int64(r), 16)
-			if len(s) == 1 {
-				b.WriteRune('0')
-			}
-			b.WriteString(s)
-			break
+		b.WriteString(`\x`)
+		s := strconv.FormatInt(int64(r), 16)
+		if len(s) == 1 {
+			b.WriteByte('0')
 		}
-		b.WriteString(`\u`)
-		b.WriteString(strconv.FormatInt(int64(r), 16))
+		b.WriteString(s)
+		break
 	}
 }
 
 func Unescape(input string) (string, error) {
-	idx := strings.IndexRune(input, '\\')
+	idx := strings.IndexByte(input, '\\')
 	// no slashes means no unescape needed
 	if idx == -1 {
 		return input, nil
 	}
 
 	buf := bytes.NewBufferString(input[:idx])
-	// get the runes for the rest of the string -- we're going full parser scan on this
+	// get the bytes for the rest of the string -- we're going full parser scan on this
 
 	p := parser{}
 	p.setPattern(input[idx+1:])
@@ -74,7 +70,7 @@ func Unescape(input string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		buf.WriteRune(r)
+		buf.WriteByte(r)
 		// are we done?
 		if p.rightMost() {
 			return buf.String(), nil
@@ -82,7 +78,7 @@ func Unescape(input string) (string, error) {
 
 		r = p.moveRightGetChar()
 		for r != '\\' {
-			buf.WriteRune(r)
+			buf.WriteByte(r)
 			if p.rightMost() {
 				// we're done, no more slashes
 				return buf.String(), nil

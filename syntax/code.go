@@ -91,7 +91,7 @@ const (
 
 type Code struct {
 	Codes       []int       // the code
-	Strings     [][]rune    // string table
+	Strings     [][]byte    // string table
 	Sets        []*CharSet  //character set table
 	TrackCount  int         // how many instructions use backtracking
 	Caps        map[int]int // mapping of user group numbers -> impl group slots
@@ -190,7 +190,7 @@ func (c *Code) OpcodeDescription(offset int) string {
 	switch op {
 	case One, Notone, Onerep, Notonerep, Oneloop, Notoneloop, Onelazy, Notonelazy:
 		buf.WriteString("Ch = ")
-		buf.WriteString(CharDescription(rune(c.Codes[offset+1])))
+		buf.WriteString(CharDescription(byte(c.Codes[offset+1])))
 
 	case Set, Setrep, Setloop, Setlazy:
 		buf.WriteString("Set = ")

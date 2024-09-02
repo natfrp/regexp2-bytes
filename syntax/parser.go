@@ -25,7 +25,7 @@ const (
 	Unicode                              = 0x0400 // "u"
 )
 
-func optionFromCode(ch rune) RegexOptions {
+func optionFromCode(ch byte) RegexOptions {
 	// case-insensitive
 	switch ch {
 	case 'i', 'I':
@@ -102,7 +102,6 @@ const (
 	ErrMissingControl             = "missing control character"
 	ErrUnrecognizedControl        = "unrecognized control character"
 	ErrTooFewHex                  = "insufficient hexadecimal digits"
-	ErrInvalidHex                 = "hex values may not be larger than 0x10FFFF"
 	ErrMalformedNameRef           = "malformed \\k<...> named back reference"
 	ErrBadClassInCharRange        = "cannot include class \\%v in character range"
 	ErrUnterminatedBracket        = "unterminated [] set"
@@ -122,7 +121,7 @@ type parser struct {
 	unit          *regexNode
 
 	patternRaw string
-	pattern    []rune
+	pattern    []byte
 
 	currentPos  int
 	specialCase *unicode.SpecialCase
@@ -185,12 +184,7 @@ func Parse(re string, op RegexOptions) (*RegexTree, error) {
 
 func (p *parser) setPattern(pattern string) {
 	p.patternRaw = pattern
-	p.pattern = make([]rune, 0, len(pattern))
-
-	//populate our rune array to handle utf8 encoding
-	for _, r := range pattern {
-		p.pattern = append(p.pattern, r)
-	}
+	p.pattern = []byte(pattern)
 }
 func (p *parser) getErr(code ErrorCode, args ...interface{}) error {
 	return &Error{Code: code, Expr: p.patternRaw, Args: args}
@@ -302,7 +296,7 @@ func (p *parser) consumeAutocap() int {
 // CountCaptures is a prescanner for deducing the slots used for
 // captures by doing a partial tokenization of the pattern.
 func (p *parser) countCaptures() error {
-	var ch rune
+	var ch byte
 
 	p.noteCaptureSlot(0, 0)
 
@@ -417,7 +411,7 @@ func (p *parser) reset(topopts RegexOptions) {
 }
 
 func (p *parser) scanRegex() (*regexNode, error) {
-	ch := '@' // nonspecial ch, means at beginning
+	ch := byte('@') // nonspecial ch, means at beginning
 	isQuant := false
 
 	p.startGroup(newRegexNodeMN(ntCapture, p.options, 0, -1))
@@ -823,10 +817,10 @@ func (p *parser) scanDollar() (*regexNode, error) {
 // a RegexNode for the type of group scanned, or nil if the group
 // simply changed options (?cimsx-cimsx) or was a comment (#...).
 func (p *parser) scanGroupOpen() (*regexNode, error) {
-	var ch rune
+	var ch byte
 	var nt nodeType
 	var err error
-	close := '>'
+	close := byte('>')
 	start := p.textpos()
 
 	// just return a RegexNode if we have:
@@ -1194,7 +1188,7 @@ func (p *parser) scanBasicBackslash(scanOnly bool) (*regexNode, error) {
 	}
 	angled := false
 	k := false
-	close := '\x00'
+	close := byte(0x00)
 
 	backpos := p.textpos()
 	ch := p.rightChar(0)
@@ -1303,7 +1297,7 @@ func (p *parser) scanBasicBackslash(scanOnly bool) (*regexNode, error) {
 	}
 
 	if p.useOptionI() {
-		ch = unicode.ToLower(ch)
+		ch = toLowerChar(ch)
 	}
 
 	return newRegexNodeCh(ntOne, p.options, ch), nil
@@ -1352,7 +1346,7 @@ func (p *parser) parseProperty() (string, error) {
 }
 
 // Returns ReNode type for zero-length assertions with a \ code.
-func (p *parser) typeFromCode(ch rune) nodeType {
+func (p *parser) typeFromCode(ch byte) nodeType {
 	switch ch {
 	case 'b':
 		if p.useOptionE() {
@@ -1440,8 +1434,8 @@ func (p *parser) scanCapname() string {
 
 // Scans contents of [] (not including []'s), and converts to a set.
 func (p *parser) scanCharSet(caseInsensitive, scanOnly bool) (*CharSet, error) {
-	ch := '\x00'
-	chPrev := '\x00'
+	ch := byte(0x00)
+	chPrev := byte(0x00)
 	inRange := false
 	firstChar := true
 	closed := false
@@ -1685,7 +1679,7 @@ func (p *parser) scanOptions() {
 }
 
 // Scans \ code for escape codes that map to single unicode chars.
-func (p *parser) scanCharEscape() (r rune, err error) {
+func (p *parser) scanCharEscape() (r byte, err error) {
 
 	ch := p.moveRightGetChar()
 
@@ -1748,7 +1742,7 @@ func (p *parser) scanCharEscape() (r rune, err error) {
 }
 
 // Grabs and converts an ascii control character
-func (p *parser) scanControl() (rune, error) {
+func (p *parser) scanControl() (byte, error) {
 	if p.charsRight() <= 0 {
 		return 0, p.getErr(ErrMissingControl)
 	}
@@ -1771,7 +1765,7 @@ func (p *parser) scanControl() (rune, error) {
 
 // Scan hex digits until we hit a closing brace.
 // Non-hex digits, hex value too large for UTF-8, or running out of chars are errors
-func (p *parser) scanHexUntilBrace() (rune, error) {
+func (p *parser) scanHexUntilBrace() (byte, error) {
 	// PCRE spec reads like unlimited hex digits are allowed, but unicode has a limit
 	// so we can enforce that
 	i := 0
@@ -1785,7 +1779,7 @@ func (p *parser) scanHexUntilBrace() (rune, error) {
 			if !hasContent {
 				return 0, p.getErr(ErrTooFewHex)
 			}
-			return rune(i), nil
+			return byte(i), nil
 		}
 		hasContent = true
 		// no brace needs to be hex digit
@@ -1796,10 +1790,6 @@ func (p *parser) scanHexUntilBrace() (rune, error) {
 
 		i *= 0x10
 		i += d
-
-		if i > unicode.MaxRune {
-			return 0, p.getErr(ErrInvalidHex)
-		}
 	}
 
 	// we only make it here if we run out of digits without finding the brace
@@ -1807,7 +1797,7 @@ func (p *parser) scanHexUntilBrace() (rune, error) {
 }
 
 // Scans exactly c hex digits (c=2 for \xFF, c=4 for \uFFFF)
-func (p *parser) scanHex(c int) (rune, error) {
+func (p *parser) scanHex(c int) (byte, error) {
 
 	i := 0
 
@@ -1827,11 +1817,11 @@ func (p *parser) scanHex(c int) (rune, error) {
 		return 0, p.getErr(ErrTooFewHex)
 	}
 
-	return rune(i), nil
+	return byte(i), nil
 }
 
 // Returns n <= 0xF for a hex digit.
-func hexDigit(ch rune) int {
+func hexDigit(ch byte) int {
 
 	if d := uint(ch - '0'); d <= 9 {
 		return int(d)
@@ -1849,7 +1839,7 @@ func hexDigit(ch rune) int {
 }
 
 // Scans up to three octal digits (stops before exceeding 0377).
-func (p *parser) scanOctal() rune {
+func (p *parser) scanOctal() byte {
 	// Consume octal chars only up to 3 digits and value 0377
 
 	c := 3
@@ -1879,7 +1869,7 @@ func (p *parser) scanOctal() rune {
 	// is simply to truncate the high bits.
 	i &= 0xFF
 
-	return rune(i)
+	return byte(i)
 }
 
 // Returns the current parsing position.
@@ -1893,7 +1883,7 @@ func (p *parser) textto(pos int) {
 }
 
 // Returns the char at the right of the current parsing position and advances to the right.
-func (p *parser) moveRightGetChar() rune {
+func (p *parser) moveRightGetChar() byte {
 	ch := p.pattern[p.currentPos]
 	p.currentPos++
 	return ch
@@ -1911,12 +1901,12 @@ func (p *parser) moveLeft() {
 }
 
 // Returns the char left of the current parsing position.
-func (p *parser) charAt(i int) rune {
+func (p *parser) charAt(i int) byte {
 	return p.pattern[i]
 }
 
 // Returns the char i chars right of the current parsing position.
-func (p *parser) rightChar(i int) rune {
+func (p *parser) rightChar(i int) byte {
 	// default would be 0
 	return p.pattern[p.currentPos+i]
 }
@@ -2016,18 +2006,18 @@ func (p *parser) addConcatenate3(lazy bool, min, max int) {
 }
 
 // Sets the current unit to a single char node
-func (p *parser) addUnitOne(ch rune) {
+func (p *parser) addUnitOne(ch byte) {
 	if p.useOptionI() {
-		ch = unicode.ToLower(ch)
+		ch = toLowerChar(ch)
 	}
 
 	p.unit = newRegexNodeCh(ntOne, p.options, ch)
 }
 
 // Sets the current unit to a single inverse-char node
-func (p *parser) addUnitNotone(ch rune) {
+func (p *parser) addUnitNotone(ch byte) {
 	if p.useOptionI() {
-		ch = unicode.ToLower(ch)
+		ch = toLowerChar(ch)
 	}
 
 	p.unit = newRegexNodeCh(ntNotone, p.options, ch)
@@ -2092,7 +2082,7 @@ func (p *parser) addToConcatenate(pos, cch int, isReplacement bool) {
 	}
 
 	if cch > 1 {
-		str := make([]rune, cch)
+		str := make([]byte, cch)
 		copy(str, p.pattern[pos:pos+cch])
 
 		if p.useOptionI() && !isReplacement {
@@ -2101,7 +2091,7 @@ func (p *parser) addToConcatenate(pos, cch int, isReplacement bool) {
 			// linguistically, but since Regex doesn't support surrogates, it's more important to be
 			// consistent.
 			for i := 0; i < len(str); i++ {
-				str[i] = unicode.ToLower(str[i])
+				str[i] = toLowerChar(str[i])
 			}
 		}
 
@@ -2110,7 +2100,7 @@ func (p *parser) addToConcatenate(pos, cch int, isReplacement bool) {
 		ch := p.charAt(pos)
 
 		if p.useOptionI() && !isReplacement {
-			ch = unicode.ToLower(ch)
+			ch = toLowerChar(ch)
 		}
 
 		node = newRegexNodeCh(ntOne, p.options, ch)
@@ -2192,22 +2182,22 @@ var _category = []byte{
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, Q, S, 0, 0, 0,
 }
 
-func isSpace(ch rune) bool {
+func isSpace(ch byte) bool {
 	return (ch <= ' ' && _category[ch] == X)
 }
 
 // Returns true for those characters that terminate a string of ordinary chars.
-func isSpecial(ch rune) bool {
+func isSpecial(ch byte) bool {
 	return (ch <= '|' && _category[ch] >= S)
 }
 
 // Returns true for those characters that terminate a string of ordinary chars.
-func isStopperX(ch rune) bool {
+func isStopperX(ch byte) bool {
 	return (ch <= '|' && _category[ch] >= X)
 }
 
 // Returns true for those characters that begin a quantifier.
-func isQuantifier(ch rune) bool {
+func isQuantifier(ch byte) bool {
 	return (ch <= '{' && _category[ch] >= Q)
 }
 

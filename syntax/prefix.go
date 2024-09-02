@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
-	"unicode"
-	"unicode/utf8"
 )
 
 type Prefix struct {
-	PrefixStr       []rune
+	PrefixStr       []byte
 	PrefixSet       CharSet
 	CaseInsensitive bool
 }
@@ -280,7 +278,7 @@ type regexFc struct {
 	caseInsensitive bool
 }
 
-func newRegexFc(ch rune, not, nullable, caseInsensitive bool) regexFc {
+func newRegexFc(ch byte, not, nullable, caseInsensitive bool) regexFc {
 	r := regexFc{
 		caseInsensitive: caseInsensitive,
 		nullable:        nullable,
@@ -289,8 +287,8 @@ func newRegexFc(ch rune, not, nullable, caseInsensitive bool) regexFc {
 		if ch > 0 {
 			r.cc.addRange('\x00', ch-1)
 		}
-		if ch < 0xFFFF {
-			r.cc.addRange(ch+1, utf8.MaxRune)
+		if ch < 0xFF {
+			r.cc.addRange(ch+1, 0xFF)
 		}
 	} else {
 		r.cc.addRange(ch, ch)
@@ -363,7 +361,7 @@ func getPrefix(tree *RegexTree) *Prefix {
 
 		case ntOne:
 			return &Prefix{
-				PrefixStr:       []rune{curNode.ch},
+				PrefixStr:       []byte{curNode.ch},
 				CaseInsensitive: (curNode.options & IgnoreCase) != 0,
 			}
 
@@ -389,13 +387,13 @@ func getPrefix(tree *RegexTree) *Prefix {
 	}
 }
 
-// repeat the rune r, c times... up to the max of MaxPrefixSize
-func repeat(r rune, c int) []rune {
+// repeat the byte r, c times... up to the max of MaxPrefixSize
+func repeat(r byte, c int) []byte {
 	if c > MaxPrefixSize {
 		c = MaxPrefixSize
 	}
 
-	ret := make([]rune, c)
+	ret := make([]byte, c)
 
 	// binary growth using copy for speed
 	ret[0] = r
@@ -419,15 +417,14 @@ func repeat(r rune, c int) []rune {
 type BmPrefix struct {
 	positive        []int
 	negativeASCII   []int
-	negativeUnicode [][]int
-	pattern         []rune
-	lowASCII        rune
-	highASCII       rune
+	pattern         []byte
+	lowASCII        byte
+	highASCII       byte
 	rightToLeft     bool
 	caseInsensitive bool
 }
 
-func newBmPrefix(pattern []rune, caseInsensitive, rightToLeft bool) *BmPrefix {
+func newBmPrefix(pattern []byte, caseInsensitive, rightToLeft bool) *BmPrefix {
 
 	b := &BmPrefix{
 		rightToLeft:     rightToLeft,
@@ -442,7 +439,7 @@ func newBmPrefix(pattern []rune, caseInsensitive, rightToLeft bool) *BmPrefix {
 			// linguistically, but since Regex doesn't support surrogates, it's more important to be
 			// consistent.
 
-			b.pattern[i] = unicode.ToLower(b.pattern[i])
+			b.pattern[i] = toLowerChar(b.pattern[i])
 		}
 	}
 
@@ -542,61 +539,28 @@ Outerloop:
 	// appear in the string are in the table. (Maximum size with
 	// Unicode is 65K; ASCII only case is 512 bytes.)
 
-	b.negativeASCII = make([]int, 128)
+	b.negativeASCII = make([]int, 256)
 
 	for i := 0; i < len(b.negativeASCII); i++ {
 		b.negativeASCII[i] = last - beforefirst
 	}
 
-	b.lowASCII = 127
+	b.lowASCII = 255
 	b.highASCII = 0
 
 	for examine = last; examine != beforefirst; examine -= bump {
 		ch = b.pattern[examine]
 
-		switch {
-		case ch < 128:
-			if b.lowASCII > ch {
-				b.lowASCII = ch
-			}
+		if b.lowASCII > ch {
+			b.lowASCII = ch
+		}
 
-			if b.highASCII < ch {
-				b.highASCII = ch
-			}
+		if b.highASCII < ch {
+			b.highASCII = ch
+		}
 
-			if b.negativeASCII[ch] == last-beforefirst {
-				b.negativeASCII[ch] = last - examine
-			}
-		case ch <= 0xffff:
-			i, j := ch>>8, ch&0xFF
-
-			if b.negativeUnicode == nil {
-				b.negativeUnicode = make([][]int, 256)
-			}
-
-			if b.negativeUnicode[i] == nil {
-				newarray := make([]int, 256)
-
-				for k := 0; k < len(newarray); k++ {
-					newarray[k] = last - beforefirst
-				}
-
-				if i == 0 {
-					copy(newarray, b.negativeASCII)
-					//TODO: this line needed?
-					b.negativeASCII = newarray
-				}
-
-				b.negativeUnicode[i] = newarray
-			}
-
-			if b.negativeUnicode[i][j] == last-beforefirst {
-				b.negativeUnicode[i][j] = last - examine
-			}
-		default:
-			// we can't do the filter because this algo doesn't support
-			// unicode chars >0xffff
-			return nil
+		if b.negativeASCII[ch] == last-beforefirst {
+			b.negativeASCII[ch] = last - examine
 		}
 	}
 
@@ -614,16 +578,16 @@ func (b *BmPrefix) Dump(indent string) string {
 	fmt.Fprintf(buf, "%sBM Pattern: %s\n%sPositive: ", indent, string(b.pattern), indent)
 	for i := 0; i < len(b.positive); i++ {
 		buf.WriteString(strconv.Itoa(b.positive[i]))
-		buf.WriteRune(' ')
+		buf.WriteByte(' ')
 	}
-	buf.WriteRune('\n')
+	buf.WriteByte('\n')
 
 	if b.negativeASCII != nil {
 		buf.WriteString(indent)
 		buf.WriteString("Negative table\n")
 		for i := 0; i < len(b.negativeASCII); i++ {
 			if b.negativeASCII[i] != len(b.pattern) {
-				fmt.Fprintf(buf, "%s  %s %s\n", indent, Escape(string(rune(i))), strconv.Itoa(b.negativeASCII[i]))
+				fmt.Fprintf(buf, "%s  %s %s\n", indent, Escape(string(byte(i))), strconv.Itoa(b.negativeASCII[i]))
 			}
 		}
 	}
@@ -637,13 +601,12 @@ func (b *BmPrefix) Dump(indent string) string {
 //
 // The direction and case-sensitivity of the match is determined
 // by the arguments to the RegexBoyerMoore constructor.
-func (b *BmPrefix) Scan(text []rune, index, beglimit, endlimit int) int {
+func (b *BmPrefix) Scan(text []byte, index, beglimit, endlimit int) int {
 	var (
 		defadv, test, test2         int
 		match, startmatch, endmatch int
 		bump, advance               int
-		chTest                      rune
-		unicodeLookup               []int
+		chTest                      byte
 	)
 
 	if !b.rightToLeft {
@@ -670,22 +633,11 @@ func (b *BmPrefix) Scan(text []rune, index, beglimit, endlimit int) int {
 		chTest = text[test]
 
 		if b.caseInsensitive {
-			chTest = unicode.ToLower(chTest)
+			chTest = toLowerChar(chTest)
 		}
 
 		if chTest != chMatch {
-			if chTest < 128 {
-				advance = b.negativeASCII[chTest]
-			} else if chTest < 0xffff && len(b.negativeUnicode) > 0 {
-				unicodeLookup = b.negativeUnicode[chTest>>8]
-				if len(unicodeLookup) > 0 {
-					advance = unicodeLookup[chTest&0xFF]
-				} else {
-					advance = defadv
-				}
-			} else {
-				advance = defadv
-			}
+			advance = b.negativeASCII[chTest]
 
 			test += advance
 		} else { // if (chTest == chMatch)
@@ -707,25 +659,12 @@ func (b *BmPrefix) Scan(text []rune, index, beglimit, endlimit int) int {
 				chTest = text[test2]
 
 				if b.caseInsensitive {
-					chTest = unicode.ToLower(chTest)
+					chTest = toLowerChar(chTest)
 				}
 
 				if chTest != b.pattern[match] {
 					advance = b.positive[match]
-					if chTest < 128 {
-						test2 = (match - startmatch) + b.negativeASCII[chTest]
-					} else if chTest < 0xffff && len(b.negativeUnicode) > 0 {
-						unicodeLookup = b.negativeUnicode[chTest>>8]
-						if len(unicodeLookup) > 0 {
-							test2 = (match - startmatch) + unicodeLookup[chTest&0xFF]
-						} else {
-							test += advance
-							break
-						}
-					} else {
-						test += advance
-						break
-					}
+					test2 = (match - startmatch) + b.negativeASCII[chTest]
 
 					if b.rightToLeft {
 						if test2 < advance {
@@ -744,7 +683,7 @@ func (b *BmPrefix) Scan(text []rune, index, beglimit, endlimit int) int {
 }
 
 // When a regex is anchored, we can do a quick IsMatch test instead of a Scan
-func (b *BmPrefix) IsMatch(text []rune, index, beglimit, endlimit int) bool {
+func (b *BmPrefix) IsMatch(text []byte, index, beglimit, endlimit int) bool {
 	if !b.rightToLeft {
 		if index < beglimit || endlimit-index < len(b.pattern) {
 			return false
@@ -760,7 +699,7 @@ func (b *BmPrefix) IsMatch(text []rune, index, beglimit, endlimit int) bool {
 	}
 }
 
-func (b *BmPrefix) matchPattern(text []rune, index int) bool {
+func (b *BmPrefix) matchPattern(text []byte, index int) bool {
 	if len(text)-index < len(b.pattern) {
 		return false
 	}
@@ -768,7 +707,7 @@ func (b *BmPrefix) matchPattern(text []rune, index int) bool {
 	if b.caseInsensitive {
 		for i := 0; i < len(b.pattern); i++ {
 			//Debug.Assert(textinfo.ToLower(_pattern[i]) == _pattern[i], "pattern should be converted to lower case in constructor!");
-			if unicode.ToLower(text[index+i]) != b.pattern[i] {
+			if toLowerChar(text[index+i]) != b.pattern[i] {
 				return false
 			}
 		}

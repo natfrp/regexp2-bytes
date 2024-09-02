@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/dlclark/regexp2/syntax"
 )
@@ -19,7 +18,7 @@ type runner struct {
 
 	runtextstart int // starting point for search
 
-	runtext    []rune // text to search
+	runtext    []byte // text to search
 	runtextpos int    // current position in text
 	runtextend int
 
@@ -73,7 +72,7 @@ type runner struct {
 // quick is usually false, but can be true to not return matches, just put it in caches
 // textstart is -1 to start at the "beginning" (depending on Right-To-Left), otherwise an index in input
 // input is the string to search for our regex pattern
-func (re *Regexp) run(quick bool, textstart int, input []rune) (*Match, error) {
+func (re *Regexp) run(quick bool, textstart int, input []byte) (*Match, error) {
 
 	// get a cached runner
 	runner := re.getRunner()
@@ -100,7 +99,7 @@ func (re *Regexp) run(quick bool, textstart int, input []rune) (*Match, error) {
 // The optimizer can compute a set of candidate starting characters,
 // and we could use a separate method Skip() that will quickly scan past
 // any characters that we know can't match.
-func (r *runner) scan(rt []rune, textstart int, quick bool, timeout time.Duration) (*Match, error) {
+func (r *runner) scan(rt []byte, textstart int, quick bool, timeout time.Duration) (*Match, error) {
 	r.timeout = timeout
 	r.ignoreTimeout = (time.Duration(math.MaxInt64) == timeout)
 	r.runtextstart = textstart
@@ -592,7 +591,7 @@ func (r *runner) execute() error {
 			continue
 
 		case syntax.One:
-			if r.forwardchars() < 1 || r.forwardcharnext() != rune(r.operand(0)) {
+			if r.forwardchars() < 1 || r.forwardcharnext() != byte(r.operand(0)) {
 				break
 			}
 
@@ -600,7 +599,7 @@ func (r *runner) execute() error {
 			continue
 
 		case syntax.Notone:
-			if r.forwardchars() < 1 || r.forwardcharnext() == rune(r.operand(0)) {
+			if r.forwardchars() < 1 || r.forwardcharnext() == byte(r.operand(0)) {
 				break
 			}
 
@@ -617,7 +616,7 @@ func (r *runner) execute() error {
 			continue
 
 		case syntax.Multi:
-			if !r.runematch(r.code.Strings[r.operand(0)]) {
+			if !r.bytematch(r.code.Strings[r.operand(0)]) {
 				break
 			}
 
@@ -649,7 +648,7 @@ func (r *runner) execute() error {
 				break
 			}
 
-			ch := rune(r.operand(0))
+			ch := byte(r.operand(0))
 
 			for c > 0 {
 				if r.forwardcharnext() != ch {
@@ -668,7 +667,7 @@ func (r *runner) execute() error {
 			if r.forwardchars() < c {
 				break
 			}
-			ch := rune(r.operand(0))
+			ch := byte(r.operand(0))
 
 			for c > 0 {
 				if r.forwardcharnext() == ch {
@@ -708,7 +707,7 @@ func (r *runner) execute() error {
 				c = r.forwardchars()
 			}
 
-			ch := rune(r.operand(0))
+			ch := byte(r.operand(0))
 			i := c
 
 			for ; i > 0; i-- {
@@ -733,7 +732,7 @@ func (r *runner) execute() error {
 				c = r.forwardchars()
 			}
 
-			ch := rune(r.operand(0))
+			ch := byte(r.operand(0))
 			i := c
 
 			for ; i > 0; i-- {
@@ -841,7 +840,7 @@ func (r *runner) execute() error {
 			pos := r.trackPeekN(1)
 			r.textto(pos)
 
-			if r.forwardcharnext() != rune(r.operand(0)) {
+			if r.forwardcharnext() != byte(r.operand(0)) {
 				break
 			}
 
@@ -860,7 +859,7 @@ func (r *runner) execute() error {
 			pos := r.trackPeekN(1)
 			r.textto(pos)
 
-			if r.forwardcharnext() == rune(r.operand(0)) {
+			if r.forwardcharnext() == byte(r.operand(0)) {
 				break
 			}
 
@@ -1144,8 +1143,8 @@ func (r *runner) forwardchars() int {
 	return r.runtextend - r.runtextpos
 }
 
-func (r *runner) forwardcharnext() rune {
-	var ch rune
+func (r *runner) forwardcharnext() byte {
+	var ch byte
 	if r.rightToLeft {
 		r.runtextpos--
 		ch = r.runtext[r.runtextpos]
@@ -1155,12 +1154,12 @@ func (r *runner) forwardcharnext() rune {
 	}
 
 	if r.caseInsensitive {
-		return unicode.ToLower(ch)
+		return toLowerChar(ch)
 	}
 	return ch
 }
 
-func (r *runner) runematch(str []rune) bool {
+func (r *runner) bytematch(str []byte) bool {
 	var pos int
 
 	c := len(str)
@@ -1190,7 +1189,7 @@ func (r *runner) runematch(str []rune) bool {
 		for c != 0 {
 			c--
 			pos--
-			if str[c] != unicode.ToLower(r.runtext[pos]) {
+			if str[c] != toLowerChar(r.runtext[pos]) {
 				return false
 			}
 		}
@@ -1241,7 +1240,7 @@ func (r *runner) refmatch(index, len int) bool {
 			cmpos--
 			pos--
 
-			if unicode.ToLower(r.runtext[cmpos]) != unicode.ToLower(r.runtext[pos]) {
+			if toLowerChar(r.runtext[cmpos]) != toLowerChar(r.runtext[pos]) {
 				return false
 			}
 		}
@@ -1264,7 +1263,7 @@ func (r *runner) backwardnext() {
 	}
 }
 
-func (r *runner) charAt(j int) rune {
+func (r *runner) charAt(j int) byte {
 	return r.runtext[j]
 }
 
@@ -1493,16 +1492,16 @@ func (r *runner) stackDescription(a []int, index int) string {
 		buf.WriteString(strings.Repeat(" ", 8-buf.Len()))
 	}
 
-	buf.WriteRune('(')
+	buf.WriteByte('(')
 	for i := index; i < len(a); i++ {
 		if i > index {
-			buf.WriteRune(' ')
+			buf.WriteByte(' ')
 		}
 
 		buf.WriteString(strconv.Itoa(a[i]))
 	}
 
-	buf.WriteRune(')')
+	buf.WriteByte(')')
 
 	return buf.String()
 }
@@ -1519,10 +1518,10 @@ func (r *runner) textposDescription() string {
 	if r.runtextpos > 0 {
 		buf.WriteString(syntax.CharDescription(r.runtext[r.runtextpos-1]))
 	} else {
-		buf.WriteRune('^')
+		buf.WriteByte('^')
 	}
 
-	buf.WriteRune('>')
+	buf.WriteByte('>')
 
 	for i := r.runtextpos; i < r.runtextend; i++ {
 		buf.WriteString(syntax.CharDescription(r.runtext[i]))
@@ -1531,7 +1530,7 @@ func (r *runner) textposDescription() string {
 		buf.Truncate(61)
 		buf.WriteString("...")
 	} else {
-		buf.WriteRune('$')
+		buf.WriteByte('$')
 	}
 
 	return buf.String()

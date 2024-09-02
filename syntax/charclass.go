@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"sort"
 	"unicode"
-	"unicode/utf8"
 )
 
-// CharSet combines start-end rune ranges and unicode categories representing a set of characters
+// CharSet combines start-end byte ranges and unicode categories representing a set of characters
 type CharSet struct {
 	ranges     []singleRange
 	categories []category
@@ -24,8 +23,8 @@ type category struct {
 }
 
 type singleRange struct {
-	first rune
-	last  rune
+	first byte
+	last  byte
 }
 
 const (
@@ -34,16 +33,16 @@ const (
 )
 
 var (
-	ecmaSpace = []rune{0x0009, 0x000e, 0x0020, 0x0021, 0x00a0, 0x00a1, 0x1680, 0x1681, 0x2000, 0x200b, 0x2028, 0x202a, 0x202f, 0x2030, 0x205f, 0x2060, 0x3000, 0x3001, 0xfeff, 0xff00}
-	ecmaWord  = []rune{0x0030, 0x003a, 0x0041, 0x005b, 0x005f, 0x0060, 0x0061, 0x007b}
-	ecmaDigit = []rune{0x0030, 0x003a}
+	ecmaSpace = []byte{0x0009, 0x000e, 0x0020, 0x0021, 0x00a0, 0x00a1}
+	ecmaWord  = []byte{0x0030, 0x003a, 0x0041, 0x005b, 0x005f, 0x0060, 0x0061, 0x007b}
+	ecmaDigit = []byte{0x0030, 0x003a}
 
-	re2Space = []rune{0x0009, 0x000b, 0x000c, 0x000e, 0x0020, 0x0021}
+	re2Space = []byte{0x0009, 0x000b, 0x000c, 0x000e, 0x0020, 0x0021}
 )
 
 var (
-	AnyClass          = getCharSetFromOldString([]rune{0}, false)
-	ECMAAnyClass      = getCharSetFromOldString([]rune{0, 0x000a, 0x000b, 0x000d, 0x000e}, false)
+	AnyClass          = getCharSetFromOldString([]byte{0}, false)
+	ECMAAnyClass      = getCharSetFromOldString([]byte{0, 0x000a, 0x000b, 0x000d, 0x000e}, false)
 	NoneClass         = getCharSetFromOldString(nil, false)
 	ECMAWordClass     = getCharSetFromOldString(ecmaWord, false)
 	NotECMAWordClass  = getCharSetFromOldString(ecmaWord, true)
@@ -96,7 +95,7 @@ func getCharSetFromCategoryString(negateSet bool, negateCat bool, cats ...string
 	}
 }
 
-func getCharSetFromOldString(setText []rune, negate bool) func() *CharSet {
+func getCharSetFromOldString(setText []byte, negate bool) func() *CharSet {
 	c := CharSet{}
 	if len(setText) > 0 {
 		fillFirst := false
@@ -135,7 +134,7 @@ func getCharSetFromOldString(setText []rune, negate bool) func() *CharSet {
 			}
 		}
 		if !first {
-			c.ranges[i].last = utf8.MaxRune
+			c.ranges[i].last = 0xff
 		}
 	}
 
@@ -166,10 +165,10 @@ func (c CharSet) Copy() CharSet {
 // gets a human-readable description for a set string
 func (c CharSet) String() string {
 	buf := &bytes.Buffer{}
-	buf.WriteRune('[')
+	buf.WriteByte('[')
 
 	if c.IsNegated() {
-		buf.WriteRune('^')
+		buf.WriteByte('^')
 	}
 
 	for _, r := range c.ranges {
@@ -178,7 +177,7 @@ func (c CharSet) String() string {
 		if r.first != r.last {
 			if r.last-r.first != 1 {
 				//groups that are 1 char apart skip the dash
-				buf.WriteRune('-')
+				buf.WriteByte('-')
 			}
 			buf.WriteString(CharDescription(r.last))
 		}
@@ -189,11 +188,11 @@ func (c CharSet) String() string {
 	}
 
 	if c.sub != nil {
-		buf.WriteRune('-')
+		buf.WriteByte('-')
 		buf.WriteString(c.sub.String())
 	}
 
-	buf.WriteRune(']')
+	buf.WriteByte(']')
 
 	return buf.String()
 }
@@ -209,8 +208,8 @@ func (c CharSet) mapHashFill(buf *bytes.Buffer) {
 	binary.Write(buf, binary.LittleEndian, len(c.ranges))
 	binary.Write(buf, binary.LittleEndian, len(c.categories))
 	for _, r := range c.ranges {
-		buf.WriteRune(r.first)
-		buf.WriteRune(r.last)
+		buf.WriteByte(r.first)
+		buf.WriteByte(r.last)
 	}
 	for _, ct := range c.categories {
 		buf.WriteString(ct.cat)
@@ -226,9 +225,9 @@ func (c CharSet) mapHashFill(buf *bytes.Buffer) {
 	}
 }
 
-// CharIn returns true if the rune is in our character set (either ranges or categories).
+// CharIn returns true if the byte is in our character set (either ranges or categories).
 // It handles negations and subtracted sub-charsets.
-func (c CharSet) CharIn(ch rune) bool {
+func (c CharSet) CharIn(ch byte) bool {
 	val := false
 	// in s && !s.subtracted
 
@@ -248,7 +247,7 @@ func (c CharSet) CharIn(ch rune) bool {
 		for _, ct := range c.categories {
 			// special categories...then unicode
 			if ct.cat == spaceCategoryText {
-				if unicode.IsSpace(ch) {
+				if unicode.IsSpace(rune(ch)) {
 					// we found a space so we're done
 					// negate means this is a "bad" thing
 					val = !ct.negate
@@ -265,7 +264,7 @@ func (c CharSet) CharIn(ch rune) bool {
 					val = true
 					break
 				}
-			} else if unicode.Is(unicodeCategories[ct.cat], ch) {
+			} else if unicode.Is(unicodeCategories[ct.cat], rune(ch)) {
 				// if we're in this unicode category then we're done
 				// if negate=true on this category then we "failed" our test
 				// otherwise we're good that we found it
@@ -316,7 +315,7 @@ func (c category) String() string {
 }
 
 // CharDescription Produces a human-readable description for a single character.
-func CharDescription(ch rune) string {
+func CharDescription(ch byte) string {
 	/*if ch == '\\' {
 		return "\\\\"
 	}
@@ -338,25 +337,17 @@ func CharDescription(ch rune) string {
 // RL 1.4 Simple Word Boundaries  The class of <word_character> includes all Alphabetic
 // values from the Unicode character database, from UnicodeData.txt [UData], plus the U+200C
 // ZERO WIDTH NON-JOINER and U+200D ZERO WIDTH JOINER.
-func IsWordChar(r rune) bool {
-	//"L", "Mn", "Nd", "Pc"
-	return unicode.In(r,
-		unicode.Categories["L"], unicode.Categories["Mn"],
-		unicode.Categories["Nd"], unicode.Categories["Pc"]) || r == '\u200D' || r == '\u200C'
-	//return 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' || '0' <= r && r <= '9' || r == '_'
+func IsWordChar(r byte) bool {
+	return 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' || '0' <= r && r <= '9' || r == '_'
 }
 
-func IsECMAWordChar(r rune) bool {
-	return unicode.In(r,
-		unicode.Categories["L"], unicode.Categories["Mn"],
-		unicode.Categories["Nd"], unicode.Categories["Pc"])
-
-	//return 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' || '0' <= r && r <= '9' || r == '_'
+func IsECMAWordChar(r byte) bool {
+	return 'A' <= r && r <= 'Z' || 'a' <= r && r <= 'z' || '0' <= r && r <= '9' || r == '_'
 }
 
 // SingletonChar will return the char from the first range without validation.
 // It assumes you have checked for IsSingleton or IsSingletonInverse and will panic given bad input
-func (c CharSet) SingletonChar() rune {
+func (c CharSet) SingletonChar() byte {
 	return c.ranges[0].first
 }
 
@@ -402,7 +393,7 @@ func (c *CharSet) addDigit(ecma, negate bool, pattern string) {
 	}
 }
 
-func (c *CharSet) addChar(ch rune) {
+func (c *CharSet) addChar(ch byte) {
 	c.addRange(ch, ch)
 }
 
@@ -501,7 +492,7 @@ func (c *CharSet) addNegativeRanges(ranges []singleRange) {
 		return
 	}
 
-	var hi rune
+	var hi byte
 
 	// convert incoming ranges into opposites, assume they are in order
 	for _, r := range ranges {
@@ -511,8 +502,8 @@ func (c *CharSet) addNegativeRanges(ranges []singleRange) {
 		hi = r.last + 1
 	}
 
-	if hi < utf8.MaxRune {
-		c.ranges = append(c.ranges, singleRange{hi, utf8.MaxRune})
+	if hi < 0xFF {
+		c.ranges = append(c.ranges, singleRange{hi, 0xFF})
 	}
 
 	c.canonicalize()
@@ -544,7 +535,7 @@ func (c *CharSet) addSubtraction(sub *CharSet) {
 	c.sub = sub
 }
 
-func (c *CharSet) addRange(chMin, chMax rune) {
+func (c *CharSet) addRange(chMin, chMax byte) {
 	c.ranges = append(c.ranges, singleRange{first: chMin, last: chMax})
 	c.canonicalize()
 }
@@ -605,7 +596,7 @@ func (p singleRangeSorter) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 // Logic to reduce a character class to a unique, sorted form.
 func (c *CharSet) canonicalize() {
 	var i, j int
-	var last rune
+	var last byte
 
 	//
 	// Find and eliminate overlapping or abutting ranges
@@ -618,7 +609,7 @@ func (c *CharSet) canonicalize() {
 
 		for i, j = 1, 0; ; i++ {
 			for last = c.ranges[j].last; ; i++ {
-				if i == len(c.ranges) || last == utf8.MaxRune {
+				if i == len(c.ranges) || last == 0xFF {
 					done = true
 					break
 				}
@@ -660,7 +651,7 @@ func (c *CharSet) addLowercase() {
 	for i := 0; i < len(c.ranges); i++ {
 		r := c.ranges[i]
 		if r.first == r.last {
-			lower := unicode.ToLower(r.first)
+			lower := toLowerChar(r.first)
 			c.ranges[i] = singleRange{first: lower, last: lower}
 		} else {
 			toAdd = append(toAdd, r)
@@ -709,110 +700,18 @@ const (
 )
 
 type lcMap struct {
-	chMin, chMax rune
+	chMin, chMax byte
 	op, data     int32
 }
 
 var lcTable = []lcMap{
 	lcMap{'\u0041', '\u005A', LowercaseAdd, 32},
 	lcMap{'\u00C0', '\u00DE', LowercaseAdd, 32},
-	lcMap{'\u0100', '\u012E', LowercaseBor, 0},
-	lcMap{'\u0130', '\u0130', LowercaseSet, 0x0069},
-	lcMap{'\u0132', '\u0136', LowercaseBor, 0},
-	lcMap{'\u0139', '\u0147', LowercaseBad, 0},
-	lcMap{'\u014A', '\u0176', LowercaseBor, 0},
-	lcMap{'\u0178', '\u0178', LowercaseSet, 0x00FF},
-	lcMap{'\u0179', '\u017D', LowercaseBad, 0},
-	lcMap{'\u0181', '\u0181', LowercaseSet, 0x0253},
-	lcMap{'\u0182', '\u0184', LowercaseBor, 0},
-	lcMap{'\u0186', '\u0186', LowercaseSet, 0x0254},
-	lcMap{'\u0187', '\u0187', LowercaseSet, 0x0188},
-	lcMap{'\u0189', '\u018A', LowercaseAdd, 205},
-	lcMap{'\u018B', '\u018B', LowercaseSet, 0x018C},
-	lcMap{'\u018E', '\u018E', LowercaseSet, 0x01DD},
-	lcMap{'\u018F', '\u018F', LowercaseSet, 0x0259},
-	lcMap{'\u0190', '\u0190', LowercaseSet, 0x025B},
-	lcMap{'\u0191', '\u0191', LowercaseSet, 0x0192},
-	lcMap{'\u0193', '\u0193', LowercaseSet, 0x0260},
-	lcMap{'\u0194', '\u0194', LowercaseSet, 0x0263},
-	lcMap{'\u0196', '\u0196', LowercaseSet, 0x0269},
-	lcMap{'\u0197', '\u0197', LowercaseSet, 0x0268},
-	lcMap{'\u0198', '\u0198', LowercaseSet, 0x0199},
-	lcMap{'\u019C', '\u019C', LowercaseSet, 0x026F},
-	lcMap{'\u019D', '\u019D', LowercaseSet, 0x0272},
-	lcMap{'\u019F', '\u019F', LowercaseSet, 0x0275},
-	lcMap{'\u01A0', '\u01A4', LowercaseBor, 0},
-	lcMap{'\u01A7', '\u01A7', LowercaseSet, 0x01A8},
-	lcMap{'\u01A9', '\u01A9', LowercaseSet, 0x0283},
-	lcMap{'\u01AC', '\u01AC', LowercaseSet, 0x01AD},
-	lcMap{'\u01AE', '\u01AE', LowercaseSet, 0x0288},
-	lcMap{'\u01AF', '\u01AF', LowercaseSet, 0x01B0},
-	lcMap{'\u01B1', '\u01B2', LowercaseAdd, 217},
-	lcMap{'\u01B3', '\u01B5', LowercaseBad, 0},
-	lcMap{'\u01B7', '\u01B7', LowercaseSet, 0x0292},
-	lcMap{'\u01B8', '\u01B8', LowercaseSet, 0x01B9},
-	lcMap{'\u01BC', '\u01BC', LowercaseSet, 0x01BD},
-	lcMap{'\u01C4', '\u01C5', LowercaseSet, 0x01C6},
-	lcMap{'\u01C7', '\u01C8', LowercaseSet, 0x01C9},
-	lcMap{'\u01CA', '\u01CB', LowercaseSet, 0x01CC},
-	lcMap{'\u01CD', '\u01DB', LowercaseBad, 0},
-	lcMap{'\u01DE', '\u01EE', LowercaseBor, 0},
-	lcMap{'\u01F1', '\u01F2', LowercaseSet, 0x01F3},
-	lcMap{'\u01F4', '\u01F4', LowercaseSet, 0x01F5},
-	lcMap{'\u01FA', '\u0216', LowercaseBor, 0},
-	lcMap{'\u0386', '\u0386', LowercaseSet, 0x03AC},
-	lcMap{'\u0388', '\u038A', LowercaseAdd, 37},
-	lcMap{'\u038C', '\u038C', LowercaseSet, 0x03CC},
-	lcMap{'\u038E', '\u038F', LowercaseAdd, 63},
-	lcMap{'\u0391', '\u03AB', LowercaseAdd, 32},
-	lcMap{'\u03E2', '\u03EE', LowercaseBor, 0},
-	lcMap{'\u0401', '\u040F', LowercaseAdd, 80},
-	lcMap{'\u0410', '\u042F', LowercaseAdd, 32},
-	lcMap{'\u0460', '\u0480', LowercaseBor, 0},
-	lcMap{'\u0490', '\u04BE', LowercaseBor, 0},
-	lcMap{'\u04C1', '\u04C3', LowercaseBad, 0},
-	lcMap{'\u04C7', '\u04C7', LowercaseSet, 0x04C8},
-	lcMap{'\u04CB', '\u04CB', LowercaseSet, 0x04CC},
-	lcMap{'\u04D0', '\u04EA', LowercaseBor, 0},
-	lcMap{'\u04EE', '\u04F4', LowercaseBor, 0},
-	lcMap{'\u04F8', '\u04F8', LowercaseSet, 0x04F9},
-	lcMap{'\u0531', '\u0556', LowercaseAdd, 48},
-	lcMap{'\u10A0', '\u10C5', LowercaseAdd, 48},
-	lcMap{'\u1E00', '\u1EF8', LowercaseBor, 0},
-	lcMap{'\u1F08', '\u1F0F', LowercaseAdd, -8},
-	lcMap{'\u1F18', '\u1F1F', LowercaseAdd, -8},
-	lcMap{'\u1F28', '\u1F2F', LowercaseAdd, -8},
-	lcMap{'\u1F38', '\u1F3F', LowercaseAdd, -8},
-	lcMap{'\u1F48', '\u1F4D', LowercaseAdd, -8},
-	lcMap{'\u1F59', '\u1F59', LowercaseSet, 0x1F51},
-	lcMap{'\u1F5B', '\u1F5B', LowercaseSet, 0x1F53},
-	lcMap{'\u1F5D', '\u1F5D', LowercaseSet, 0x1F55},
-	lcMap{'\u1F5F', '\u1F5F', LowercaseSet, 0x1F57},
-	lcMap{'\u1F68', '\u1F6F', LowercaseAdd, -8},
-	lcMap{'\u1F88', '\u1F8F', LowercaseAdd, -8},
-	lcMap{'\u1F98', '\u1F9F', LowercaseAdd, -8},
-	lcMap{'\u1FA8', '\u1FAF', LowercaseAdd, -8},
-	lcMap{'\u1FB8', '\u1FB9', LowercaseAdd, -8},
-	lcMap{'\u1FBA', '\u1FBB', LowercaseAdd, -74},
-	lcMap{'\u1FBC', '\u1FBC', LowercaseSet, 0x1FB3},
-	lcMap{'\u1FC8', '\u1FCB', LowercaseAdd, -86},
-	lcMap{'\u1FCC', '\u1FCC', LowercaseSet, 0x1FC3},
-	lcMap{'\u1FD8', '\u1FD9', LowercaseAdd, -8},
-	lcMap{'\u1FDA', '\u1FDB', LowercaseAdd, -100},
-	lcMap{'\u1FE8', '\u1FE9', LowercaseAdd, -8},
-	lcMap{'\u1FEA', '\u1FEB', LowercaseAdd, -112},
-	lcMap{'\u1FEC', '\u1FEC', LowercaseSet, 0x1FE5},
-	lcMap{'\u1FF8', '\u1FF9', LowercaseAdd, -128},
-	lcMap{'\u1FFA', '\u1FFB', LowercaseAdd, -126},
-	lcMap{'\u1FFC', '\u1FFC', LowercaseSet, 0x1FF3},
-	lcMap{'\u2160', '\u216F', LowercaseAdd, 16},
-	lcMap{'\u24B6', '\u24D0', LowercaseAdd, 26},
-	lcMap{'\uFF21', '\uFF3A', LowercaseAdd, 32},
 }
 
-func (c *CharSet) addLowercaseRange(chMin, chMax rune) {
+func (c *CharSet) addLowercaseRange(chMin, chMax byte) {
 	var i, iMax, iMid int
-	var chMinT, chMaxT rune
+	var chMinT, chMaxT byte
 	var lc lcMap
 
 	for i, iMax = 0, len(lcTable); i < iMax; {
@@ -841,12 +740,12 @@ func (c *CharSet) addLowercaseRange(chMin, chMax rune) {
 
 		switch lc.op {
 		case LowercaseSet:
-			chMinT = rune(lc.data)
-			chMaxT = rune(lc.data)
+			chMinT = byte(lc.data)
+			chMaxT = byte(lc.data)
 			break
 		case LowercaseAdd:
-			chMinT += lc.data
-			chMaxT += lc.data
+			chMinT += byte(lc.data)
+			chMaxT += byte(lc.data)
 			break
 		case LowercaseBor:
 			chMinT |= 1

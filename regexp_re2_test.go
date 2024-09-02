@@ -122,33 +122,6 @@ func TestRE2Dollar_Multiline(t *testing.T) {
 	}
 }
 
-func TestRE2ExtendedZero(t *testing.T) {
-	notZero := "߀" // \u07c0
-	r := MustCompile(`^\d$`, RE2)
-	if m, _ := r.MatchString(notZero); m {
-		t.Fatal("Expected no match")
-	}
-
-	r = MustCompile(`^\D$`, RE2)
-	if m, _ := r.MatchString(notZero); !m {
-		t.Fatal("Expected match")
-	}
-}
-
-func TestRegularExtendedZero(t *testing.T) {
-	notZero := "߀" // \u07c0
-
-	r := MustCompile(`^\d$`, 0)
-	if m, _ := r.MatchString(notZero); !m {
-		t.Fatal("Expected match")
-	}
-
-	r = MustCompile(`^\D$`, 0)
-	if m, _ := r.MatchString(notZero); m {
-		t.Fatal("Expected no match")
-	}
-}
-
 func TestRE2Word(t *testing.T) {
 	r := MustCompile(`\w`, RE2)
 	if m, _ := r.MatchString("å"); m {
@@ -160,17 +133,6 @@ func TestRE2Word(t *testing.T) {
 		t.Fatal("Expected match")
 	}
 
-}
-
-func TestRegularWord(t *testing.T) {
-	r := MustCompile(`\w`, 0)
-	if m, _ := r.MatchString("å"); !m {
-		t.Fatal("Expected match")
-	}
-	r = MustCompile(`\W`, 0)
-	if m, _ := r.MatchString("å"); m {
-		t.Fatal("Expected no match")
-	}
 }
 
 func TestRE2Space(t *testing.T) {

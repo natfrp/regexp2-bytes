@@ -19,7 +19,7 @@ const (
 	replaceWholeString  = -4
 )
 
-//ErrReplacementError is a general error during parsing the replacement text
+// ErrReplacementError is a general error during parsing the replacement text
 var ErrReplacementError = errors.New("Replacement pattern error.")
 
 // NewReplacerData will populate a reusable replacer data struct based on the given replacement string
@@ -53,7 +53,7 @@ func NewReplacerData(rep string, caps map[int]int, capsize int, capnames map[str
 			child.writeStrToBuf(sb)
 
 		case ntOne:
-			sb.WriteRune(child.ch)
+			sb.WriteByte(child.ch)
 
 		case ntRef:
 			if sb.Len() > 0 {

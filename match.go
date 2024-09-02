@@ -43,11 +43,11 @@ type Group struct {
 // Capture is a single capture of text within the larger original string
 type Capture struct {
 	// the original string
-	text []rune
-	// Index is the position in the underlying rune slice where the first character of
-	// captured substring was found. Even if you pass in a string this will be in Runes.
+	text []byte
+	// Index is the position in the underlying byte slice where the first character of
+	// captured substring was found. Even if you pass in a string this will be in Bytes.
 	Index int
-	// Length is the number of runes in the captured substring.
+	// Length is the number of bytes in the captured substring.
 	Length int
 }
 
@@ -56,12 +56,12 @@ func (c *Capture) String() string {
 	return string(c.text[c.Index : c.Index+c.Length])
 }
 
-// Runes returns the captured text as a rune slice
-func (c *Capture) Runes() []rune {
+// Bytes returns the captured text as a byte slice
+func (c *Capture) Bytes() []byte {
 	return c.text[c.Index : c.Index+c.Length]
 }
 
-func newMatch(regex *Regexp, capcount int, text []rune, startpos int) *Match {
+func newMatch(regex *Regexp, capcount int, text []byte, startpos int) *Match {
 	m := Match{
 		regex:      regex,
 		matchcount: make([]int, capcount),
@@ -75,13 +75,13 @@ func newMatch(regex *Regexp, capcount int, text []rune, startpos int) *Match {
 	return &m
 }
 
-func newMatchSparse(regex *Regexp, caps map[int]int, capcount int, text []rune, startpos int) *Match {
+func newMatchSparse(regex *Regexp, caps map[int]int, capcount int, text []byte, startpos int) *Match {
 	m := newMatch(regex, capcount, text, startpos)
 	m.sparseCaps = caps
 	return m
 }
 
-func (m *Match) reset(text []rune, textstart int) {
+func (m *Match) reset(text []byte, textstart int) {
 	m.text = text
 	m.textstart = textstart
 	for i := 0; i < len(m.matchcount); i++ {
@@ -288,11 +288,11 @@ func (m *Match) groupValueAppendToBuf(groupnum int, buf *bytes.Buffer) {
 	last := index + matches[(c*2)-1]
 
 	for ; index < last; index++ {
-		buf.WriteRune(m.text[index])
+		buf.WriteByte(m.text[index])
 	}
 }
 
-func newGroup(name string, text []rune, caps []int, capcount int) Group {
+func newGroup(name string, text []byte, caps []int, capcount int) Group {
 	g := Group{}
 	g.text = text
 	if capcount > 0 {
@@ -315,7 +315,7 @@ func newGroup(name string, text []rune, caps []int, capcount int) Group {
 
 func (m *Match) dump() string {
 	buf := &bytes.Buffer{}
-	buf.WriteRune('\n')
+	buf.WriteByte('\n')
 	if len(m.sparseCaps) > 0 {
 		for k, v := range m.sparseCaps {
 			fmt.Fprintf(buf, "Slot %v -> %v\n", k, v)

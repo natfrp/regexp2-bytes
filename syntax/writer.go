@@ -31,7 +31,7 @@ type writer struct {
 	intStack    []int
 	curpos      int
 	stringhash  map[string]int
-	stringtable [][]rune
+	stringtable [][]byte
 	sethash     map[string]int
 	settable    []*CharSet
 	counting    bool
@@ -43,7 +43,7 @@ type writer struct {
 const (
 	beforeChild nodeType = 64
 	afterChild           = 128
-	//MaxPrefixSize is the largest number of runes we'll use for a BoyerMoyer prefix
+	//MaxPrefixSize is the largest number of bytes we'll use for a BoyerMoyer prefix
 	MaxPrefixSize = 50
 )
 
@@ -420,7 +420,7 @@ func (w *writer) setCode(set *CharSet) int {
 
 // Returns an index in the string table for a string.
 // uses a map to eliminate duplicates.
-func (w *writer) stringCode(str []rune) int {
+func (w *writer) stringCode(str []byte) int {
 	if w.counting {
 		return 0
 	}

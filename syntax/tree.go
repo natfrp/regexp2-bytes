@@ -55,9 +55,9 @@ type RegexTree struct {
 type regexNode struct {
 	t        nodeType
 	children []*regexNode
-	str      []rune
+	str      []byte
 	set      *CharSet
-	ch       rune
+	ch       byte
 	m        int
 	n        int
 	options  RegexOptions
@@ -122,7 +122,7 @@ func newRegexNode(t nodeType, opt RegexOptions) *regexNode {
 	}
 }
 
-func newRegexNodeCh(t nodeType, opt RegexOptions, ch rune) *regexNode {
+func newRegexNodeCh(t nodeType, opt RegexOptions, ch byte) *regexNode {
 	return &regexNode{
 		t:       t,
 		options: opt,
@@ -130,7 +130,7 @@ func newRegexNodeCh(t nodeType, opt RegexOptions, ch rune) *regexNode {
 	}
 }
 
-func newRegexNodeStr(t nodeType, opt RegexOptions, str []rune) *regexNode {
+func newRegexNodeStr(t nodeType, opt RegexOptions, str []byte) *regexNode {
 	return &regexNode{
 		t:       t,
 		options: opt,
@@ -164,7 +164,7 @@ func newRegexNodeMN(t nodeType, opt RegexOptions, m, n int) *regexNode {
 
 func (n *regexNode) writeStrToBuf(buf *bytes.Buffer) {
 	for i := 0; i < len(n.str); i++ {
-		buf.WriteRune(n.str[i])
+		buf.WriteByte(n.str[i])
 	}
 }
 
@@ -350,7 +350,7 @@ func (n *regexNode) reduceConcatenation() *regexNode {
 
 			if prev.t == ntOne {
 				prev.t = ntMulti
-				prev.str = []rune{prev.ch}
+				prev.str = []byte{prev.ch}
 			}
 
 			if (optionsAt & RightToLeft) == 0 {
@@ -367,7 +367,7 @@ func (n *regexNode) reduceConcatenation() *regexNode {
 					prev.str[0] = at.ch
 				} else {
 					//insert at the front...this one we'll make a new slice and copy both into it
-					merge := make([]rune, len(prev.str)+len(at.str))
+					merge := make([]byte, len(prev.str)+len(at.str))
 					copy(merge, at.str)
 					copy(merge[len(at.str):], prev.str)
 					prev.str = merge
@@ -625,7 +625,7 @@ func (n *regexNode) dump() string {
 	CurChild := 0
 
 	buf := bytes.NewBufferString(CurNode.description())
-	buf.WriteRune('\n')
+	buf.WriteByte('\n')
 
 	for {
 		if CurNode.children != nil && CurChild < len(CurNode.children) {
@@ -639,7 +639,7 @@ func (n *regexNode) dump() string {
 			}
 			buf.Write(padSpace[:Depth])
 			buf.WriteString(CurNode.description())
-			buf.WriteRune('\n')
+			buf.WriteByte('\n')
 		} else {
 			if len(stack) == 0 {
 				break

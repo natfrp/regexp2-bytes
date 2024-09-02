@@ -268,14 +268,14 @@ func containsEnder(line string, ender byte, allowFirst bool) bool {
 }
 
 func unEscapeToMatch(line string) string {
-	idx := strings.IndexRune(line, '\\')
+	idx := strings.IndexByte(line, '\\')
 	// no slashes means no unescape needed
 	if idx == -1 {
 		return line
 	}
 
 	buf := bytes.NewBufferString(line[:idx])
-	// get the runes for the rest of the string -- we're going full parser scan on this
+	// get the bytes for the rest of the string -- we're going full parser scan on this
 
 	inEscape := false
 	// take any \'s and convert them

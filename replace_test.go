@@ -162,7 +162,7 @@ func TestReplace_RefNumsDollarAmbiguous(t *testing.T) {
 
 func TestReplace_NestedGroups(t *testing.T) {
 	re := MustCompile(`(\p{Sc}\s?)?(\d+\.?((?<=\.)\d+)?)(?(1)|\s?\p{Sc})?`, None)
-	res, err := re.Replace("$17.43  €2 16.33  £0.98  0.43   £43   12€  17", "$2", -1, -1)
+	res, err := re.Replace("$17.43  $2 16.33  $0.98  0.43   $43   12$  17", "$2", -1, -1)
 	if err != nil {
 		t.Fatal(err)
 	}

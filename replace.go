@@ -124,17 +124,17 @@ func replacementImpl(data *syntax.ReplacerData, buf *bytes.Buffer, m *Match) {
 			switch -replaceSpecials - 1 - r { // special insertion patterns
 			case replaceLeftPortion:
 				for i := 0; i < m.Index; i++ {
-					buf.WriteRune(m.text[i])
+					buf.WriteByte(m.text[i])
 				}
 			case replaceRightPortion:
 				for i := m.Index + m.Length; i < len(m.text); i++ {
-					buf.WriteRune(m.text[i])
+					buf.WriteByte(m.text[i])
 				}
 			case replaceLastGroup:
 				m.groupValueAppendToBuf(m.GroupCount()-1, buf)
 			case replaceWholeString:
 				for i := 0; i < len(m.text); i++ {
-					buf.WriteRune(m.text[i])
+					buf.WriteByte(m.text[i])
 				}
 			}
 		}
@@ -156,17 +156,17 @@ func replacementImplRTL(data *syntax.ReplacerData, al *[]string, m *Match) {
 			switch -replaceSpecials - 1 - r { // special insertion patterns
 			case replaceLeftPortion:
 				for i := 0; i < m.Index; i++ {
-					buf.WriteRune(m.text[i])
+					buf.WriteByte(m.text[i])
 				}
 			case replaceRightPortion:
 				for i := m.Index + m.Length; i < len(m.text); i++ {
-					buf.WriteRune(m.text[i])
+					buf.WriteByte(m.text[i])
 				}
 			case replaceLastGroup:
 				m.groupValueAppendToBuf(m.GroupCount()-1, buf)
 			case replaceWholeString:
 				for i := 0; i < len(m.text); i++ {
-					buf.WriteRune(m.text[i])
+					buf.WriteByte(m.text[i])
 				}
 			}
 			l = append(l, buf.String())
